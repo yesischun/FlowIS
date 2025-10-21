@@ -1,6 +1,4 @@
-# FlowIS:An explicitly probabilistic accelerated testing environment for autonomous driving
-
-ProjectName and Description
+# FlowIS: An explicitly probabilistic accelerated testing environment for autonomous driving
 
 ### 1.Project Overview
 FlowIS is a probability-driven scene-behavior joint accelerated evaluation method designed to address the core challenge of autonomous vehicle (AV) safety evaluation: the inefficiency of testing rare safety-critical events (e.g., collisions, near-misses) in naturalistic driving environments (NDEs).
