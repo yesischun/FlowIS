@@ -11,13 +11,13 @@ Base Simulator: Highway-Env.
 Custom Modifications: Enabled flexible probability control of initial scenes and background vehicle behaviors.
 
 ### 2.Methodology
-
+<img src="Figure/Figure 1.svg" alt="项目演示效果">
 
 
 ### 3.Pre-development configuration requirements
 
-1. The original Highway-Env environment, refer to XXX
-2. The test object algorithm that can be accessed; in this project, the rl-agent is adopted, refer to XXX
+1. The original Highway-Env environment, refer to [Highway-env](https://github.com/eleurent/highway-env)
+2. The test object algorithm that can be accessed; in this project, the rl-agents is adopted, refer to [rl-agents](https://github.com/eleurent/rl-agents)
 3. A runtime environment suitable for PyTorch
 
 ### 4.File Directory Description
