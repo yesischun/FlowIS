@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flowis"
+version = "0.1.0"
+description = "FlowIS: probabilistic accelerated testing environments for autonomous driving"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE.txt" }
+authors = [
+  { name = "FlowIS Authors" }
+]
+dependencies = [
+  "gymnasium>=0.29,<1.1",
+  "numpy>=1.23,<2",
+  "scipy>=1.9",
+  "pandas>=1.5",
+  "scikit-learn>=1.2",
+  "joblib>=1.2",
+  "matplotlib>=3.7",
+  "pygame>=2.5"
+]
+
+[project.optional-dependencies]
+torch = [
+  "torch>=2.1",
+  "torchvision>=0.16"
+]
+experiments = [
+  "tqdm>=4.66",
+  "ipython>=8.0",
+  "ipykernel>=6.0",
+  "jupyterlab>=4.0",
+  "rl-agents>=1.0",
+  "tensorboardX>=2.6"
+]
+dev = [
+  "ipykernel>=6.0",
+  "jupyterlab>=4.0"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["FlowIS*", "highway_env*"]

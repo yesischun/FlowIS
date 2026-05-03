@@ -1,0 +1,185 @@
+﻿import json
+from pathlib import Path
+
+nb = {
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "# HighD FlowIS End-to-End Pipeline (Refactor Draft)\n",
+        "\n",
+        "这个 notebook 用于可视化检查 FlowIS 的核心链路：\n",
+        "1. 分布拟合/加载后的场景-行为采样输入\n",
+        "2. 仿真器中的行为注入与逐步重要性权重\n",
+        "3. 最终统计图与诊断图\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "import traceback\n",
+        "import warnings\n",
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "import matplotlib.pyplot as plt\n",
+        "import gymnasium as gym\n",
+        "from gymnasium.envs.registration import registry\n",
+        "import highway_env\n",
+        "warnings.filterwarnings('ignore', message='.*Overriding environment .*already in registry.*')\n",
+        "if 'HighDEnv-v0' not in registry and hasattr(highway_env, 'register_highway_envs'):\n",
+        "    highway_env.register_highway_envs()\n",
+        "\n",
+        "plt.rcParams['figure.figsize'] = (10, 4)\n",
+        "plt.rcParams['axes.grid'] = True\n",
+        "print('Imports ready')\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 1) 实验配置\n",
+        "\n",
+        "如果你有现成的 artifact 路径，可在这里补充。\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "CONFIG = {\n",
+        "    'env_id': 'HighDEnv-v0',\n",
+        "    'episodes': 2,\n",
+        "    'max_steps': 200,\n",
+        "    'flowis_behavior_proposal': 'tde',  # or 'nde'\n",
+        "    'flowis_artifact_dir': None,\n",
+        "    'flowis_tde_path': None,\n",
+        "    'flowis_nde_path': None,\n",
+        "    # 其他外部模型/数据路径按你现有 HighD_env.ipynb 的前置单元格变量接入\n",
+        "}\n",
+        "CONFIG\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 2) 采样与注入轨迹采集\n",
+        "\n",
+        "该单元会记录每一步的 info['flowis']。\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "def collect_flowis_traces(env, episodes=1, max_steps=200):\n",
+        "    rows = []\n",
+        "    for ep in range(episodes):\n",
+        "        obs, info = env.reset()\n",
+        "        for t in range(max_steps):\n",
+        "            action = env.action_space.sample()\n",
+        "            obs, reward, terminated, truncated, info = env.step(action)\n",
+        "            flow = info.get('flowis', {}) if isinstance(info, dict) else {}\n",
+        "            trace = flow.get('trace', {}) if isinstance(flow, dict) else {}\n",
+        "            rows.append({\n",
+        "                'episode': ep,\n",
+        "                'step': t,\n",
+        "                'reward': float(reward),\n",
+        "                'done': bool(terminated or truncated),\n",
+        "                'log_weight_step': flow.get('log_weight_step'),\n",
+        "                'log_weight_episode': flow.get('log_weight_episode'),\n",
+        "                'accepted': trace.get('accepted'),\n",
+        "                'trials': trace.get('trials'),\n",
+        "                'behavior': trace.get('behavior'),\n",
+        "                'log_q_cond': trace.get('log_q_cond'),\n",
+        "                'log_p_cond': trace.get('log_p_cond'),\n",
+        "                'scene_raw': trace.get('scene_raw'),\n",
+        "                'scene_behavior_raw': trace.get('scene_behavior_raw'),\n",
+        "                'sampler': trace.get('sampler'),\n",
+        "            })\n",
+        "            if terminated or truncated:\n",
+        "                break\n",
+        "    return pd.DataFrame(rows)\n",
+        "\n",
+        "df = None\n",
+        "try:\n",
+        "    env = gym.make(CONFIG['env_id'])\n",
+        "    env.unwrapped.configure({\n",
+        "        'flowis_behavior_proposal': CONFIG['flowis_behavior_proposal'],\n",
+        "        'flowis_trace': True,\n",
+        "        'flowis_artifact_dir': CONFIG['flowis_artifact_dir'],\n",
+        "        'flowis_tde_path': CONFIG['flowis_tde_path'],\n",
+        "        'flowis_nde_path': CONFIG['flowis_nde_path'],\n",
+        "    })\n",
+        "    df = collect_flowis_traces(env, CONFIG['episodes'], CONFIG['max_steps'])\n",
+        "    env.close()\n",
+        "    print(f'Collected {len(df)} rows')\n",
+        "except Exception as e:\n",
+        "    print('Collection failed. External HighD artifacts may be missing.')\n",
+        "    print(type(e).__name__, e)\n",
+        "    traceback.print_exc(limit=1)\n",
+        "\n",
+        "df.head() if isinstance(df, pd.DataFrame) and len(df) else df\n"
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        "## 3) 注入过程可视化\n"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": None,
+      "metadata": {},
+      "outputs": [],
+      "source": [
+        "if isinstance(df, pd.DataFrame) and len(df):\n",
+        "    show = df.copy()\n",
+        "    for col in ['log_weight_step', 'log_weight_episode', 'trials', 'behavior', 'log_q_cond', 'log_p_cond']:\n",
+        "        show[col] = pd.to_numeric(show[col], errors='coerce')\n",
+        "\n",
+        "    fig, axes = plt.subplots(1, 3, figsize=(16, 4))\n",
+        "    axes[0].plot(show.index, show['log_weight_step'])\n",
+        "    axes[0].set_title('Per-step log weight')\n",
+        "    axes[1].plot(show.index, show['log_weight_episode'])\n",
+        "    axes[1].set_title('Cumulative log weight')\n",
+        "    axes[2].plot(show.index, show['trials'])\n",
+        "    axes[2].set_title('Rejection trials per step')\n",
+        "    plt.tight_layout()\n",
+        "    plt.show()\n",
+        "    print(show['sampler'].value_counts(dropna=False))\n",
+        "else:\n",
+        "    print('No trace data yet. Configure external artifacts and rerun collection cell.')\n"
+      ]
+    }
+  ],
+  "metadata": {
+    "kernelspec": {
+      "display_name": "FlowIS (Python 3.11.15)",
+      "language": "python",
+      "name": "python3"
+    },
+    "language_info": {
+      "name": "python",
+      "version": "3.11"
+    }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5
+}
+
+out = Path('Experiments') / 'HighD_flowis_pipeline.ipynb'
+out.parent.mkdir(parents=True, exist_ok=True)
+out.write_text(json.dumps(nb, ensure_ascii=False, indent=2), encoding='utf-8')
+print(str(out.resolve()))
